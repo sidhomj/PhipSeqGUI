@@ -180,7 +180,7 @@ guidata(fhgat,handles);
             handles.Viral_Peptide_List.String=add;
         else
             add=setdiff(add,current_list);
-            handles.Viral_Peptide_List.String=[current_list;transpose(add)];
+            handles.Viral_Peptide_List.String=[current_list;transpose(add)];  
         end
         
         guidata(findobj('Tag','Gate_Population'),handles);

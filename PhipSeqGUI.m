@@ -22,7 +22,7 @@ function varargout = PhipSeqGUI(varargin)
 
 % Edit the above text to modify the response to help PhipSeqGUI
 
-% Last Modified by GUIDE v2.5 23-Jan-2018 14:13:20
+% Last Modified by GUIDE v2.5 23-Jan-2018 18:14:55
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -54,6 +54,9 @@ function PhipSeqGUI_OpeningFcn(hObject, eventdata, handles, varargin)
 
 % Choose default command line output for PhipSeqGUI
 handles.output = hObject;
+handles.cluster_alg_list.String={'Hard KMEANS (on t-SNE)','Hard KMEANS (on HD Data)',...
+    'DBSCAN','Hierarchical Clustering','Network Graph-Based','Self Organized Map',...
+    'GMM - Expectation Minimization','Variational Bayesian Inference for GMM'};
 addpath('Functions/');
 addpath('tSNE_matlab/');
 
@@ -233,7 +236,7 @@ function TSNE_Callback(hObject, eventdata, handles)
 % hObject    handle to TSNE (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
-hbox=msgbox('Computing Distance Matrix...')
+hbox=msgbox('t-SNE...')
 
 Peptides_Master=[];
 FC_Master=[];
@@ -260,6 +263,10 @@ handles.ID_Master=ID_Master;
 sel=find(sum(X_Master,1)~=0);
 handles.X_Master=X_Master(:,sel);
 handles.channels_out = handles.channels(sel);
+handles.HeatMap_TSNE.String=handles.channels_out;
+handles.Sort_By_Menu.String=handles.channels_out;
+handles.Threshold_By_Menu.String=handles.channels_out;
+
 
 %%%t-SNE Analysis on high-dimensional matrix based on bit scores
 
@@ -275,9 +282,14 @@ for i=1:size(ID_Master,1);
     colorscheme(i,:)=colorspec1(ID_Master(i)).spec;
 end
 
-FC_Plot = (FC_Master/max(FC_Master))*500;
+if log10(max(FC_Master)) == Inf;
+    max_new=max(FC_Master(FC_Master~=Inf));
+    FC_Master(FC_Master==Inf)=max_new;
+end
+    
+handles.FC_Plot = (log10(FC_Master)/log10(max(FC_Master)))*400;
 
-scatter(handles.axes1,Y(:,1),Y(:,2),FC_Plot,colorscheme,'filled','MarkerFaceAlpha',0.75,'MarkerEdgeColor',[0 0 0],'MarkerEdgeAlpha',0.6);
+scatter(handles.axes1,Y(:,1),Y(:,2),handles.FC_Plot,colorscheme,'filled','MarkerFaceAlpha',0.75,'MarkerEdgeColor',[0 0 0],'MarkerEdgeAlpha',0.6);
 
 handles.axes1.XTickLabel={};
 handles.axes1.YTickLabel={};
@@ -286,6 +298,7 @@ handles.tsne_ylim=handles.axes1.YLim;
 
 PlotClusterView(handles,Y);
 guidata(hObject,handles);
+close(hbox);
 
 
 % --- Executes on selection change in HeatMap_TSNE.
@@ -297,6 +310,24 @@ function HeatMap_TSNE_Callback(hObject, eventdata, handles)
 % Hints: contents = cellstr(get(hObject,'String')) returns HeatMap_TSNE contents as cell array
 %        contents{get(hObject,'Value')} returns selected item from HeatMap_TSNE
 
+contents=cellstr(get(hObject,'String'));
+sel=get(hObject,'Value');
+Y=handles.Y;
+channel=handles.X_Master(:,sel);
+
+cutofftop=prctile(channel,100);
+cutoffbottom=prctile(channel,0);
+replace=(channel>cutofftop);
+channel(replace)=cutofftop;
+replace=channel<cutoffbottom;
+channel(replace)=cutoffbottom;
+
+
+figure('Name',contents{sel},'NumberTitle','off');
+scatter(Y(:,1),Y(:,2),handles.FC_Plot,channel,'filled');
+colormap('jet');
+title(contents(sel),'FontSize',10,'Interpreter','none')
+
 
 % --- Executes during object creation, after setting all properties.
 function HeatMap_TSNE_CreateFcn(hObject, eventdata, handles)
@@ -305,6 +336,550 @@ function HeatMap_TSNE_CreateFcn(hObject, eventdata, handles)
 % handles    empty - handles not created until after all CreateFcns called
 
 % Hint: popupmenu controls usually have a white background on Windows.
+%       See ISPC and COMPUTER.
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+
+% --- Executes on button press in save_axes_1.
+function save_axes_1_Callback(hObject, eventdata, handles)
+% hObject    handle to save_axes_1 (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+[file,path,filetype]=uiputfile({'*.bmp','BMP';'*.jpeg','JPEG';'*.png','PNG'},'Save Image As');
+F=getframe(handles.axes1);
+Image=frame2im(F);
+imwrite(Image,strcat(path,file));
+
+
+% --- Executes on button press in save_axes_2.
+function save_axes_2_Callback(hObject, eventdata, handles)
+% hObject    handle to save_axes_2 (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+[file,path,filetype]=uiputfile({'*.bmp','BMP';'*.jpeg','JPEG';'*.png','PNG'},'Save Image As');
+F=getframe(handles.axes2);
+Image=frame2im(F);
+imwrite(Image,strcat(path,file));
+
+
+% --- Executes on button press in Load_Workspace.
+function Load_Workspace_Callback(hObject, eventdata, handles)
+% hObject    handle to Load_Workspace (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+[file,path,filetype]=uigetfile({'*.mat','MAT'});
+load(strcat(path,file),'handles');
+currentobjects=findall(0);
+
+n=1;
+for i=1:size(currentobjects,1);
+    try
+    nametemp=currentobjects(i).Name;
+    indx(n)=i;
+    n=n+1;
+    catch
+        continue
+    end
+end
+
+close(currentobjects(indx(end)));
+
+
+% --- Executes on button press in Save_Workspace.
+function Save_Workspace_Callback(hObject, eventdata, handles)
+% hObject    handle to Save_Workspace (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+[file,path,filetype]=uiputfile({'*.mat','MAT'});
+hbox=msgbox('Saving Workspace...');
+save(strcat(path,file),'handles');
+close(hbox);
+
+% --- Executes on button press in Cluster.
+function Cluster_Callback(hObject, eventdata, handles)
+% hObject    handle to Cluster (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+Y=handles.Y;
+ClusterMethod=handles.cluster_alg_list.Value;
+clusterparameter=str2num(handles.cluster_parameter.String);
+
+switch ClusterMethod
+
+    case 1
+        
+        hbox=msgbox('Clustering Events...');
+        num_clusters=clusterparameter;
+        idx=kmeans(Y,num_clusters,'Start','uniform');
+    case 2
+        
+        hbox=msgbox('Clustering Events...');
+        num_clusters=clusterparameter;
+        idx=kmeans(handles.X_Master,num_clusters,'Start','uniform');
+    
+    case 3
+        hbox=msgbox('Clustering Events...');
+        epsilonf=clusterparameter/100;
+        D=pdist(Y);
+        epsilon=(epsilonf)*median(D); %.02 default
+        MinPoints=1;%(0.0001)*size(Y,1); %.0001 default
+        [idx,isnoise]=DBSCAN(Y,epsilon,MinPoints);
+        num_clusters=max(idx);
+    case 4
+        hbox=msgbox('Clustering Events...');
+        dm=pdist(handles.X_Master);
+        z=linkage(dm);
+        idx=cluster(z,'cutoff',clusterparameter);
+        num_clusters=max(idx);
+    case 5
+        NetworkGui(handles);
+        waitfor(findobj('Tag','networkgui'));
+        
+        hbox=msgbox('Creating Graph...');
+        [G,GGraph]=CreateGraph(handles.X_Master,clusterparameter);
+        close(hbox);
+        
+        handles=guidata(findobj('Tag','clusterbutton'));
+     
+        switch handles.graphclustermethod  
+            case 1      
+                hbox=msgbox('Clustering Events...');
+                N=length(G);
+                W=PermMat(N);                     % permute the graph node labels
+                A=W*G*W';
+                
+                [COMTY ending] = cluster_jl_cppJW(A,1);
+                J=size(COMTY.COM,2);
+                VV=COMTY.COM{J}';
+                idx=W'*VV;      
+                              
+            case 2
+                hbox=msgbox('Clustering Events...');
+                idx=GCModulMax2(G); 
+            case 3
+                hbox=msgbox('Clustering Events...');
+                idx=GCModulMax3(G);
+            case 4
+                hbox=msgbox('Clustering Events...');
+                idx=GCDanon(G);
+            case 5
+                clusterparameter2=inputdlg('Enter # of Clusters');
+                hbox=msgbox('Clustering Events...');
+                clusterparameter2=str2num(clusterparameter2{1});
+                idx=GCSpectralClust1(G,clusterparameter2);
+                idx=idx(:,clusterparameter2);
+                
+        end
+        num_clusters=max(idx);
+    case 6
+        hbox=msgbox('Clustering Events...');
+        net=selforgmap([round(sqrt(clusterparameter)),round(sqrt(clusterparameter))]);
+        net.trainParam.showWindow = false;
+        net=train(net,transpose(handles.X_Master));
+        idx=transpose(vec2ind(net(transpose(handles.X_Master))));
+        num_clusters=max(idx);
+    case 7
+        hbox=msgbox('Clustering Events...');
+        try 
+         idx=transpose(mixGaussEm(transpose(handles.X_Master),clusterparameter));
+        num_clusters=max(idx); 
+        catch
+            msgbox('Enter smaller # of Clusters');
+        end
+        
+    case 8
+        hbox=msgbox('Clustering Events...');
+        try
+        idx=transpose(mixGaussVb(transpose(handles.X_Master),clusterparameter));
+        num_clusters=max(idx);
+        catch
+            msgbox('Enter smaller # of Clusters');
+        end
+        
+        end
+    close(hbox);
+    
+    [colorspec1,colorspec2]=CreateColorTemplate(num_clusters);
+    handles.colorspec1=colorspec1;
+    
+    clear colorscheme
+    for i=1:size(idx,1);
+        colorscheme(i,:)=colorspec1(idx(i)).spec;
+    end
+    PlotClusterView(handles,Y,colorscheme);
+ 
+    y=handles.X_Master;
+    ClusterContrib=tabulate(idx);
+    
+    for i=1:num_clusters
+        ClusterNames(i)=strcat('Cluster ',num2str(i),{' - '},num2str(ClusterContrib(i,3)),{'%'});
+    end
+
+    [HeatMapData,RowLabels,SizeCluster]=GetHeatMapData(num_clusters,idx,y,ClusterMethod,ClusterContrib);
+    
+    handles.Cluster_Selection_Listbox.String=ClusterNames;
+    handles.idx=idx; 
+    handles.ClusterContrib=ClusterContrib;
+    handles.num_clusters=num_clusters;
+    handles.HeatMapData=HeatMapData;
+    handles.RowLabels=RowLabels;
+    handles.SizeCluster=SizeCluster;
+    handles.I=[1:num_clusters];
+    handles.Imod=handles.I;
+    guidata(hObject,handles);
+    datacursormode on
+    dcm_obj=datacursormode(handles.axes2.Parent);
+    set(dcm_obj,'UpdateFcn',{@myupdatefcn,idx,Y})
+
+
+% --- Executes on button press in Clear_Clusters.
+function Clear_Clusters_Callback(hObject, eventdata, handles)
+% hObject    handle to Clear_Clusters (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+
+% --- Executes on selection change in Threshold_Listbox.
+function Threshold_Listbox_Callback(hObject, eventdata, handles)
+% hObject    handle to Threshold_Listbox (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hints: contents = cellstr(get(hObject,'String')) returns Threshold_Listbox contents as cell array
+%        contents{get(hObject,'Value')} returns selected item from Threshold_Listbox
+
+
+% --- Executes during object creation, after setting all properties.
+function Threshold_Listbox_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to Threshold_Listbox (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+% Hint: listbox controls usually have a white background on Windows.
+%       See ISPC and COMPUTER.
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+
+% --- Executes on button press in HeatMap_Events.
+function HeatMap_Events_Callback(hObject, eventdata, handles)
+% hObject    handle to HeatMap_Events (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+
+% --- Executes on button press in HeatMap_Clusters.
+function HeatMap_Clusters_Callback(hObject, eventdata, handles)
+% hObject    handle to HeatMap_Clusters (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+
+% --- Executes on selection change in Cluster_Selection_Listbox.
+function Cluster_Selection_Listbox_Callback(hObject, eventdata, handles)
+% hObject    handle to Cluster_Selection_Listbox (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hints: contents = cellstr(get(hObject,'String')) returns Cluster_Selection_Listbox contents as cell array
+%        contents{get(hObject,'Value')} returns selected item from Cluster_Selection_Listbox
+
+
+% --- Executes during object creation, after setting all properties.
+function Cluster_Selection_Listbox_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to Cluster_Selection_Listbox (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+% Hint: listbox controls usually have a white background on Windows.
+%       See ISPC and COMPUTER.
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+
+% --- Executes on selection change in Cluster_Analyze_Listbox.
+function Cluster_Analyze_Listbox_Callback(hObject, eventdata, handles)
+% hObject    handle to Cluster_Analyze_Listbox (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hints: contents = cellstr(get(hObject,'String')) returns Cluster_Analyze_Listbox contents as cell array
+%        contents{get(hObject,'Value')} returns selected item from Cluster_Analyze_Listbox
+
+
+% --- Executes during object creation, after setting all properties.
+function Cluster_Analyze_Listbox_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to Cluster_Analyze_Listbox (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+% Hint: listbox controls usually have a white background on Windows.
+%       See ISPC and COMPUTER.
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+
+% --- Executes on button press in Select_Cluster_Button.
+function Select_Cluster_Button_Callback(hObject, eventdata, handles)
+% hObject    handle to Select_Cluster_Button (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+
+% --- Executes on button press in Remove_Cluster_Button.
+function Remove_Cluster_Button_Callback(hObject, eventdata, handles)
+% hObject    handle to Remove_Cluster_Button (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+
+% --- Executes on selection change in Sort_By_Menu.
+function Sort_By_Menu_Callback(hObject, eventdata, handles)
+% hObject    handle to Sort_By_Menu (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hints: contents = cellstr(get(hObject,'String')) returns Sort_By_Menu contents as cell array
+%        contents{get(hObject,'Value')} returns selected item from Sort_By_Menu
+
+handles=SortClusters(handles);
+handles=ApplyCurrentThresh(handles);
+handles=ClusterCut(handles);
+PlotSelectClusters(handles);
+guidata(hObject,handles);
+
+
+% --- Executes during object creation, after setting all properties.
+function Sort_By_Menu_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to Sort_By_Menu (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+% Hint: popupmenu controls usually have a white background on Windows.
+%       See ISPC and COMPUTER.
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+
+% --- Executes on selection change in Threshold_By_Menu.
+function Threshold_By_Menu_Callback(hObject, eventdata, handles)
+% hObject    handle to Threshold_By_Menu (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hints: contents = cellstr(get(hObject,'String')) returns Threshold_By_Menu contents as cell array
+%        contents{get(hObject,'Value')} returns selected item from Threshold_By_Menu
+
+
+% --- Executes during object creation, after setting all properties.
+function Threshold_By_Menu_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to Threshold_By_Menu (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+% Hint: popupmenu controls usually have a white background on Windows.
+%       See ISPC and COMPUTER.
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+contents=cellstr(get(hObject,'String'));
+Value=contents{get(hObject,'Value')};
+Threshold_GUI(handles,Value);
+
+
+function Frequency_Cut_Callback(hObject, eventdata, handles)
+% hObject    handle to Frequency_Cut (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hints: get(hObject,'String') returns contents of Frequency_Cut as text
+%        str2double(get(hObject,'String')) returns contents of Frequency_Cut as a double
+
+handles=SortClusters(handles);
+handles=ApplyCurrentThresh(handles);
+handles=ClusterCut(handles);
+PlotSelectClusters(handles)
+guidata(hObject,handles);
+
+
+% --- Executes during object creation, after setting all properties.
+function Frequency_Cut_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to Frequency_Cut (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+% Hint: edit controls usually have a white background on Windows.
+%       See ISPC and COMPUTER.
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+
+% --- Executes on button press in Sort_Toggle.
+function Sort_Toggle_Callback(hObject, eventdata, handles)
+% hObject    handle to Sort_Toggle (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hint: get(hObject,'Value') returns toggle state of Sort_Toggle
+if get(hObject,'Value')
+    handles.Sort_Toggle.String='Ascending';
+else
+    handles.Sort_Toggle.String='Descending';
+end
+
+Sort_By_Menu_Callback(hObject, eventdata, handles);
+
+
+% --- Executes on button press in Clear_Thresholds.
+function Clear_Thresholds_Callback(hObject, eventdata, handles)
+% hObject    handle to Clear_Thresholds (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+
+% --- Executes on button press in Select_Clusters.
+function Select_Clusters_Callback(hObject, eventdata, handles)
+% hObject    handle to Select_Clusters (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+dcm_obj=datacursormode(handles.axes2.Parent);
+set(dcm_obj,'Enable','off');
+
+if ~isfield(handles,'ManualClusterCount')
+    if isfield(handles,'idx')
+        handles=rmfield(handles,'idx');
+        handles=rmfield(handles,'colorspec1');
+    end
+    [colorspec1,colorspec2]=CreateColorTemplate(100);
+    handles.colorspec1=colorspec1;
+    handles.Cluster_Selection_Listbox.String={};
+    Y=handles.Y;
+    scatter(handles.axes2,Y(:,1),Y(:,2),'filled');
+    handles.axes2.XTickLabel={};
+    handles.axes2.YTickLabel={};
+    hold(handles.axes2)
+    handles.ManualClusterCount=1;
+    I=1;
+else
+    Y=handles.Y;
+    handles.ManualClusterCount=handles.ManualClusterCount+1;
+    colorspec1=handles.colorspec1;
+    idx=handles.idx;
+    I=handles.I;
+    I=[I,I(end)+1];
+    handles.I=I;
+    handles.Imod=I;
+    ClusterContrib=handles.ClusterContrib;
+end
+
+sel=selectdata('SelectionMode','Lasso','Verify','on');
+if handles.ManualClusterCount~=1
+    sel=sel{handles.ManualClusterCount};
+end
+in=zeros(size(handles.Y,1),1);
+in(sel)=1;
+in=logical(in);
+Yplot=handles.Y(in,:);
+%hold(handles.cluster_view);
+scatter(handles.axes2,Yplot(:,1),Yplot(:,2),[],colorspec1(handles.ManualClusterCount).spec,'filled');
+handles.axes2.XLim=handles.tsne_xlim;
+handles.axes2.YLim=handles.tsne_ylim;
+hold(handles.axes2);
+
+ClusterContrib(handles.ManualClusterCount,1)=handles.ManualClusterCount;
+ClusterContrib(handles.ManualClusterCount,2)=sum(in);
+ClusterContrib(handles.ManualClusterCount,3)=100*(sum(in)/size(in,1));
+handles.ClusterContrib=ClusterContrib;
+
+sortedlist=cell(1,size(I,2));
+for i=1:size(I,2);
+    sortedlist(i)=strcat({'Cluster '},num2str(I(i)),{' - '},num2str(ClusterContrib(I(i),3)),{'%'});
+end
+
+
+if handles.ManualClusterCount==1;
+    handles.Cluster_Selection_Listbox.Value=[];
+    handles.Cluster_Selection_Listbox.String=sortedlist;
+    handles.idx=double(in);
+    handles.I=I;
+    handles.Imod=I;
+else
+    p=handles.ManualClusterCount;
+    idx=handles.idx+p*double(in);
+    handles.idx=double(idx);
+    handles.Cluster_Selection_Listbox.Value=[];
+    handles.Cluster_Selection_Listbox.String=sortedlist;
+    handles=HeatMap_CallbackManual(hObject, eventdata, handles);
+end
+
+guidata(hObject,handles);
+
+
+% --- Executes on selection change in cluster_alg_list.
+function cluster_alg_list_Callback(hObject, eventdata, handles)
+% hObject    handle to cluster_alg_list (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hints: contents = cellstr(get(hObject,'String')) returns cluster_alg_list contents as cell array
+%        contents{get(hObject,'Value')} returns selected item from cluster_alg_list
+%        contents{get(hObject,'Value')} returns selected item from clustermethods
+
+sel=handles.cluster_alg_list.Value;
+if ismember(sel,[1 2 6 7 8])
+    set(handles.cluster_parameter,'String','# of Clusters');
+elseif ismember(sel,[3 4])
+    set(handles.cluster_parameter,'String','Distance Factor');
+elseif ismember(sel,[5])
+    set(handles.cluster_parameter,'String','k-nearest neighbors');
+end
+guidata(hObject,handles);
+
+
+% --- Executes during object creation, after setting all properties.
+function cluster_alg_list_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to cluster_alg_list (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+% Hint: listbox controls usually have a white background on Windows.
+%       See ISPC and COMPUTER.
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+
+
+function cluster_parameter_Callback(hObject, eventdata, handles)
+% hObject    handle to cluster_parameter (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hints: get(hObject,'String') returns contents of cluster_parameter as text
+%        str2double(get(hObject,'String')) returns contents of cluster_parameter as a double
+
+
+% --- Executes during object creation, after setting all properties.
+function cluster_parameter_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to cluster_parameter (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+% Hint: edit controls usually have a white background on Windows.
 %       See ISPC and COMPUTER.
 if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
     set(hObject,'BackgroundColor','white');
