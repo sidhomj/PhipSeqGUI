@@ -275,7 +275,9 @@ for i=1:size(ID_Master,1);
     colorscheme(i,:)=colorspec1(ID_Master(i)).spec;
 end
 
-scatter(handles.axes1,Y(:,1),Y(:,2),100,colorscheme,'filled','MarkerFaceAlpha',0.75,'MarkerEdgeColor',[0 0 0],'MarkerEdgeAlpha',0.6);
+FC_Plot = (FC_Master/max(FC_Master))*500;
+
+scatter(handles.axes1,Y(:,1),Y(:,2),FC_Plot,colorscheme,'filled','MarkerFaceAlpha',0.75,'MarkerEdgeColor',[0 0 0],'MarkerEdgeAlpha',0.6);
 
 handles.axes1.XTickLabel={};
 handles.axes1.YTickLabel={};
