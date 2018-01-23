@@ -233,7 +233,57 @@ function TSNE_Callback(hObject, eventdata, handles)
 % hObject    handle to TSNE (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
-check=1
+hbox=msgbox('Computing Distance Matrix...')
+
+Peptides_Master=[];
+FC_Master=[];
+ID_Master=[];
+X_Master=[];
+n=1;
+for i = 1:size(handles.Data_Struct,2)
+    peptides=handles.Data_Struct(i).Peptides;
+    Peptides_Master=[Peptides_Master;peptides];
+    FC=handles.Data_Struct(i).Counts(end).Counts./handles.Data_Struct(i).Counts(1).Counts;
+    FC_Master=[FC_Master;FC];
+    id=repmat(n,size(peptides,1),1);
+    ID_Master=[ID_Master;id];
+    c=find(ismember(handles.peptides,peptides));
+    values=handles.ref(c,:);
+    X_Master=[X_Master;values];
+    n=n+1;
+end
+handles.Peptides_Master=Peptides_Master;
+handles.FC_Master=FC_Master;
+handles.ID_Master=ID_Master;
+
+%%%Remove channels with all 0's
+sel=find(sum(X_Master,1)~=0);
+handles.X_Master=X_Master(:,sel);
+handles.channels_out = handles.channels(sel);
+
+%%%t-SNE Analysis on high-dimensional matrix based on bit scores
+
+normalizetsne=1;
+Y=tsne(handles.X_Master,'Standardize',normalizetsne);
+handles.Y=Y;
+
+[colorspec1,colorspec2]=CreateColorTemplate(100);
+handles.colorspec1=colorspec1;
+
+clear colorscheme
+for i=1:size(ID_Master,1);
+    colorscheme(i,:)=colorspec1(ID_Master(i)).spec;
+end
+
+scatter(handles.axes1,Y(:,1),Y(:,2),100,colorscheme,'filled','MarkerFaceAlpha',0.75,'MarkerEdgeColor',[0 0 0],'MarkerEdgeAlpha',0.6);
+
+handles.axes1.XTickLabel={};
+handles.axes1.YTickLabel={};
+handles.tsne_xlim=handles.axes1.XLim;
+handles.tsne_ylim=handles.axes1.YLim;
+
+PlotClusterView(handles,Y);
+guidata(hObject,handles);
 
 
 % --- Executes on selection change in HeatMap_TSNE.
