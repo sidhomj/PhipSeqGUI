@@ -89,11 +89,11 @@ fileread=strcat(folder,filename);
 load(fileread);
 details=whos(matfile(fileread));
 ref_name=details.name;
-eval(['channels=' ref_name '.Properties.VariableNames;'])
-for i=1:size(channels,2)
+eval(['channels=' ref_name '.Properties.VariableNames;']);
+for i=2:size(channels,2)
         temp=channels{i};
-        temp=strsplit(temp,'s__');
-        channels(i)=temp(end);
+        temp=strsplit(temp,'__');
+        channels(i)=strcat(temp(end-1),'_',temp(end));
 end
 handles.channels=channels(2:end);
 eval(['ref = table2array(' ref_name ');']);
@@ -446,7 +446,7 @@ switch ClusterMethod
         [G,GGraph]=CreateGraph(handles.X_Master,clusterparameter);
         close(hbox);
         
-        handles=guidata(findobj('Tag','clusterbutton'));
+        handles=guidata(findobj('Tag','Cluster'));
      
         switch handles.graphclustermethod  
             case 1      
@@ -574,6 +574,11 @@ function HeatMap_Events_Callback(hObject, eventdata, handles)
 % hObject    handle to HeatMap_Events (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
+ChannelsOut=handles.channels_out;
+y=handles.X_Master;
+hbox=msgbox('Calculating HeatMap...');
+PlotHeatMap(y,[],ChannelsOut);
+close(hbox);
 
 
 % --- Executes on button press in HeatMap_Clusters.
@@ -581,6 +586,56 @@ function HeatMap_Clusters_Callback(hObject, eventdata, handles)
 % hObject    handle to HeatMap_Clusters (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
+
+if ~isfield(handles,'ManualClusterCount')
+    ChannelsOut=handles.channels_out;
+    RowLabels=handles.RowLabels;
+    HeatMapData=handles.HeatMapData;
+    idx=handles.idx;
+    y=handles.X_Master;
+    
+    
+    select=handles.Cluster_Analyze_Listbox.Value;
+    if isfield(handles,'Ifinal')
+        I=handles.Ifinal(select);
+        if size(I,2)==2
+            ChannelsOut=DetermineSigChannels(I,y,idx,ChannelsOut);
+        end
+        HeatMapData=HeatMapData(I,:);
+        RowLabels=I;
+    end
+    
+    hmobj=PlotHeatMap(HeatMapData,RowLabels,ChannelsOut);
+    else
+    ChannelsOut=handles.channels_out;
+    idx=handles.idx;
+    ClusterIter=[1:max(idx)];
+    y=handles.X_Master;
+    
+    for j=ClusterIter
+            clusterselect=idx==j;
+            SizeCluster(j)=sum(clusterselect);
+            clusterselect2=y(clusterselect,:);
+            HeatMapData(j,:)=median(clusterselect2); 
+            RowLabels{j}=strcat('Cluster ',num2str(j),' = ',num2str(100*(SizeCluster(j)/size(y,1))),'%');
+    end
+    
+
+    PlotHeatMap(HeatMapData,RowLabels,ChannelsOut);
+    handles.HeatMapData=HeatMapData;
+    handles.RowLabels=RowLabels;
+    ClusterContrib=tabulate(idx);
+    if ClusterContrib(1,1)==0
+        ClusterContrib=ClusterContrib(2:end,:);
+    end
+    handles.SizeCluster=SizeCluster;
+    handles.ClusterContrib=ClusterContrib;
+    handles.I=ClusterIter;
+    handles.num_clusters=max(idx);
+    guidata(hObject,handles);
+    
+    
+end
 
 
 % --- Executes on selection change in Cluster_Selection_Listbox.
@@ -634,6 +689,28 @@ function Select_Cluster_Button_Callback(hObject, eventdata, handles)
 % hObject    handle to Select_Cluster_Button (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
+sel=handles.Cluster_Selection_Listbox.Value;
+Imod=handles.Imod;
+I=Imod(sel);
+ClusterContrib=handles.ClusterContrib;
+
+sortedlist=cell(1,size(I,2));
+for i=1:size(sel,2);
+    sortedlist(i)=strcat({'Cluster '},num2str(I(i)),{' - '},num2str(ClusterContrib(I(i),3)),{'%'});
+end
+
+currentlist=transpose(handles.Cluster_Analyze_Listbox.String);
+finallist=[currentlist,sortedlist];
+finallist=unique(finallist,'stable');
+handles.Cluster_Analyze_Listbox.Value=[1];
+handles.Cluster_Analyze_Listbox.String=finallist;
+if isfield(handles,'Ifinal');
+    handles.Ifinal=unique([handles.Ifinal,I],'stable');
+else
+    handles.Ifinal=I;
+end
+
+guidata(hObject,handles);
 
 
 % --- Executes on button press in Remove_Cluster_Button.
@@ -641,6 +718,19 @@ function Remove_Cluster_Button_Callback(hObject, eventdata, handles)
 % hObject    handle to Remove_Cluster_Button (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
+
+sel=handles.Cluster_Analyze_Listbox.Value;
+currentlist=transpose(handles.Cluster_Analyze_Listbox.String);
+removelist=transpose(handles.Cluster_Analyze_Listbox.String(sel));
+
+newlist=setdiff(currentlist,removelist,'stable');
+handles.Cluster_Analyze_Listbox.Value=[1];
+handles.Cluster_Analyze_Listbox.String=newlist;
+
+handles.Ifinal=setdiff(handles.Ifinal,handles.Ifinal(sel),'stable');
+
+
+guidata(hObject,handles);
 
 
 % --- Executes on selection change in Sort_By_Menu.
@@ -861,7 +951,6 @@ function cluster_alg_list_CreateFcn(hObject, eventdata, handles)
 if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
     set(hObject,'BackgroundColor','white');
 end
-
 
 
 function cluster_parameter_Callback(hObject, eventdata, handles)
