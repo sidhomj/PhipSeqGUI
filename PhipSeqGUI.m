@@ -93,7 +93,7 @@ eval(['channels=' ref_name '.Properties.VariableNames;']);
 for i=2:size(channels,2)
         temp=channels{i};
         temp=strsplit(temp,'__');
-        channels(i)=strcat(temp(end-1),'_',temp(end));
+        channels(i)=strcat(temp(end-1),'__',temp(end));
 end
 handles.channels=channels(2:end);
 eval(['ref = table2array(' ref_name ');']);
@@ -545,6 +545,30 @@ function Clear_Clusters_Callback(hObject, eventdata, handles)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
 
+fieldremove={'colorspec1','idx','num_clusters','HeatMapData','RowLabels','SizeCluster',...
+    'Ifinal','thresholdcurrent','ClusterContrib','I','Imod','ManualClusterCount','thresholdbook','threshold_count'};
+
+for i=1:size(fieldremove,2);
+    if isfield(handles,fieldremove{i})
+        handles=rmfield(handles,fieldremove{i});
+    end
+end
+
+handles.Threshold_Listbox.String={};
+handles.Cluster_Selection_Listbox.Value=[];
+handles.Cluster_Selection_Listbox.String={};
+handles.Cluster_Analyze_Listbox.Value=[];
+handles.Cluster_Analyze_Listbox.String={};
+handles.Sort_By_Menu.Value=1;
+handles.Threshold_By_Menu.Value=1;
+handles.Frequency_Cut.String='';
+handles.clusterbreakdown.Data={};
+handles.clusterbreakdown2.Data={};
+Y=handles.Y;
+PlotClusterView(handles,Y);
+
+guidata(hObject,handles);
+
 
 % --- Executes on selection change in Threshold_Listbox.
 function Threshold_Listbox_Callback(hObject, eventdata, handles)
@@ -605,6 +629,10 @@ if ~isfield(handles,'ManualClusterCount')
         RowLabels=I;
     end
     
+    %%Remove columns that contain all 0's
+    HeatMapData=HeatMapData(:,sum(HeatMapData,1)~=0);
+    ChannelsOut=ChannelsOut(sum(HeatMapData,1)~=0);
+    
     hmobj=PlotHeatMap(HeatMapData,RowLabels,ChannelsOut);
     else
     ChannelsOut=handles.channels_out;
@@ -620,7 +648,9 @@ if ~isfield(handles,'ManualClusterCount')
             RowLabels{j}=strcat('Cluster ',num2str(j),' = ',num2str(100*(SizeCluster(j)/size(y,1))),'%');
     end
     
-
+     %%Remove columns that contain all 0's
+    HeatMapData=HeatMapData(:,sum(HeatMapData,1)~=0);
+    
     PlotHeatMap(HeatMapData,RowLabels,ChannelsOut);
     handles.HeatMapData=HeatMapData;
     handles.RowLabels=RowLabels;
@@ -771,6 +801,10 @@ function Threshold_By_Menu_Callback(hObject, eventdata, handles)
 % Hints: contents = cellstr(get(hObject,'String')) returns Threshold_By_Menu contents as cell array
 %        contents{get(hObject,'Value')} returns selected item from Threshold_By_Menu
 
+contents=cellstr(get(hObject,'String'));
+Value=contents{get(hObject,'Value')};
+Threshold_GUI(handles,Value);
+
 
 % --- Executes during object creation, after setting all properties.
 function Threshold_By_Menu_CreateFcn(hObject, eventdata, handles)
@@ -784,9 +818,7 @@ if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgr
     set(hObject,'BackgroundColor','white');
 end
 
-contents=cellstr(get(hObject,'String'));
-Value=contents{get(hObject,'Value')};
-Threshold_GUI(handles,Value);
+
 
 
 function Frequency_Cut_Callback(hObject, eventdata, handles)
@@ -838,6 +870,16 @@ function Clear_Thresholds_Callback(hObject, eventdata, handles)
 % hObject    handle to Clear_Thresholds (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
+
+if isfield(handles,'thresholdbook')
+    handles=rmfield(handles,'thresholdbook');
+    handles=rmfield(handles,'threshold_count');
+end
+handles.Threshold_Listbox.Value=[1];
+handles.Threshold_Listbox.String=[];
+handles.I=[1:handles.num_clusters];
+guidata(hObject,handles);
+Sort_By_Menu_Callback(hObject, eventdata, handles)
 
 
 % --- Executes on button press in Select_Clusters.

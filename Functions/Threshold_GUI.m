@@ -36,15 +36,6 @@ thresholdval=uicontrol('Parent',fh,'Style','edit',...
 
 handles.thresholdval=thresholdval;
 
-yscalelocvar=uicontrol('Style','pop',...
-    'String',{'arcsinh';'linear'},...
-    'units','normalized',...
-    'Position',[.4,0.03,0.2,0.05],...
-    'Tag','yscale',...
-    'Callback',@yscaleloc);
-
-handles.yscaleloc=yscalelocvar;
-
 addabovevar=uicontrol('Style','push',...
     'String','Add Above Threshold',...
     'units','normalized',...
@@ -64,21 +55,15 @@ addbelowvar=uicontrol('Style','push',...
 handles.addbelow=addbelowvar;
 
 title=uicontrol('Style','text',...
-    'String',handles.popupmenu2.String{handles.popupmenu2.Value},...
+    'String',handles.Threshold_By_Menu.String{handles.Threshold_By_Menu.Value},...
     'units','normalized',...
     'Position',[.225,.925,0.2,0.05],...
     'FontSize',16);
 
-y=handles.y2;
-ytrans=handles.transy2;
-if handles.yscaleloc.Value==1
-    %clusterselect2=subplus(log10(subplus(clusterselect2)));
-    clusterselect2=ytrans;
-else
-    clusterselect2=y;
-end
+y=handles.X_Master;
+clusterselect2=y;
 r=normrnd(1,0.15,size(clusterselect2,1),1);
-index=strmatch(Value,handles.ChannelsAll,'exact');
+index=strmatch(Value,handles.channels_out,'exact');
 axes(h);
 dscatter(r,clusterselect2(:,index));
 h.XTickLabel={};
@@ -118,53 +103,22 @@ function slider(hObject, eventdata)
     if isfield(handles,'line')
         delete(handles.line);
     end
-    index=strmatch(handles.Value,handles.ChannelsAll,'exact');
+    index=strmatch(handles.Value,handles.channels_out,'exact');
     
-    if handles.yscaleloc.Value==1
-        dataquery=handles.transy2(:,index);
-        up=prctile(dataquery,100);
-        down=prctile(dataquery,0);
-        factor=(up-down);
-        linepos=get(hObject,'Value')*factor+down;
-    else
-        dataquery=handles.y2(:,index);
-        up=prctile(dataquery,100);
-        down=prctile(dataquery,0);
-        factor=(up-down);
-        linepos=get(hObject,'Value')*factor+down;
-    end
-    
+    dataquery=handles.X_Master(:,index);
+    up=prctile(dataquery,100);
+    down=prctile(dataquery,0);
+    factor=(up-down);
+    linepos=get(hObject,'Value')*factor+down;
+   
     h=imline(handles.h,[-10 10],[linepos linepos]);
     handles.line=h;
     hpos=getPosition(h);
-    if handles.yscaleloc.Value==1
-        handles.thresholdcurrent=hpos(1,2);
-    else
-        handles.thresholdcurrent=hpos(1,2);
-    end
+    handles.thresholdcurrent=hpos(1,2);
     handles.thresholdval.String=num2str(handles.thresholdcurrent);
     guidata(hObject,handles);
 end
 
-function yscaleloc(hObject,eventdata)
-        handles=guidata(hObject);
-        ytrans=handles.transy2;
-        ylin=handles.y2;
-        if get(hObject,'Value')==1
-            clusterselect2=ytrans;
-        else
-            clusterselect2=ylin;
-        end
-        r=normrnd(1,0.15,size(clusterselect2,1),1);
-        index=strmatch(handles.Value,handles.ChannelsAll,'exact');
-        axes(handles.h);
-        dscatter(r,clusterselect2(:,index));
-        handles.h.XTickLabel={};
-        handles.h.XLim=[0,2];
-        dataquery=clusterselect2(:,index);
-        handles.h.YLim=[prctile(dataquery,0),prctile(dataquery,100)];
-        guidata(hObject,handles);
-end
         
 function addabove(hObject,eventdata)
     handles=guidata(hObject);
@@ -176,21 +130,21 @@ function addabove(hObject,eventdata)
         handles.thresholdbook(1).Channel=channelselstring;
         handles.thresholdbook(1).threshold=thresholdvalue;
         handles.thresholdbook(1).direction='>';
-        handles.threshlist.String=strcat(channelselstring,{' , '},num2str(thresholdvalue),{' , '},'>');
+        handles.Threshold_Listbox.String=strcat(channelselstring,{' , '},num2str(thresholdvalue),{' , '},'>');
         handles.threshold_count=1;
     else
-        currentlist=handles.threshlist.String;
+        currentlist=handles.Threshold_Listbox.String;
         count=handles.threshold_count;
         handles.thresholdbook(count+1).Channel=channelselstring;
         handles.thresholdbook(count+1).threshold=thresholdvalue;
         handles.thresholdbook(count+1).direction='>';
         currentlist=[currentlist;strcat(channelselstring,{' , '},num2str(thresholdvalue),{' , '},'>')];
-        handles.threshlist.String=currentlist;
+        handles.Threshold_Listbox.String=currentlist;
         handles.threshold_count=count+1;
     end
     handles=ApplyCurrentThresh(handles);
     handles=ClusterCut(handles);
-    guidata(findobj('Tag','popupmenu2'),handles);
+    guidata(findobj('Tag','Threshold_By_Menu'),handles);
     closereq
 end
         
@@ -204,7 +158,7 @@ function addbelow(hObject,eventdata)
         handles.thresholdbook(1).Channel=channelselstring;
         handles.thresholdbook(1).threshold=thresholdvalue;
         handles.thresholdbook(1).direction='<';
-        handles.threshlist.String=strcat(channelselstring,{' , '},num2str(thresholdvalue),{' , '},'<');
+        handles.Threshold_Listbox.String=strcat(channelselstring,{' , '},num2str(thresholdvalue),{' , '},'<');
         handles.threshold_count=1;
     else
         currentlist=handles.threshlist.String;
@@ -213,12 +167,12 @@ function addbelow(hObject,eventdata)
         handles.thresholdbook(count+1).threshold=thresholdvalue;
         handles.thresholdbook(count+1).direction='<';
         currentlist=[currentlist;strcat(channelselstring,{' , '},num2str(thresholdvalue),{' , '},'<')];
-        handles.threshlist.String=currentlist;
+        handles.Threshold_Listbox.String=currentlist;
         handles.threshold_count=count+1;
     end
     handles=ApplyCurrentThresh(handles);
     handles=ClusterCut(handles);
-    guidata(findobj('Tag','popupmenu2'),handles);
+    guidata(findobj('Tag','Threshold_By_Menu'),handles);
     closereq
 end
 
