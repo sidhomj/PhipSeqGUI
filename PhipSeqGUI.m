@@ -22,7 +22,7 @@ function varargout = PhipSeqGUI(varargin)
 
 % Edit the above text to modify the response to help PhipSeqGUI
 
-% Last Modified by GUIDE v2.5 23-Jan-2018 18:14:55
+% Last Modified by GUIDE v2.5 24-Jan-2018 12:46:55
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -282,7 +282,7 @@ for i=1:size(ID_Master,1);
     colorscheme(i,:)=colorspec1(ID_Master(i)).spec;
 end
 
-if log10(max(FC_Master)) == Inf;
+if log2(max(FC_Master)) == Inf;
     max_new=max(FC_Master(FC_Master~=Inf));
     FC_Master(FC_Master==Inf)=max_new;
 end
@@ -630,8 +630,9 @@ if ~isfield(handles,'ManualClusterCount')
     end
     
     %%Remove columns that contain all 0's
-    HeatMapData=HeatMapData(:,sum(HeatMapData,1)~=0);
-    ChannelsOut=ChannelsOut(sum(HeatMapData,1)~=0);
+    sel=sum(HeatMapData,1)~=0;
+    HeatMapData=HeatMapData(:,sel);
+    ChannelsOut=ChannelsOut(sel);
     
     hmobj=PlotHeatMap(HeatMapData,RowLabels,ChannelsOut);
     else
@@ -740,6 +741,8 @@ else
     handles.Ifinal=I;
 end
 
+handles=UpdateTable(handles);
+
 guidata(hObject,handles);
 
 
@@ -759,7 +762,7 @@ handles.Cluster_Analyze_Listbox.String=newlist;
 
 handles.Ifinal=setdiff(handles.Ifinal,handles.Ifinal(sel),'stable');
 
-
+handles=UpdateTable(handles);
 guidata(hObject,handles);
 
 
@@ -1015,3 +1018,12 @@ function cluster_parameter_CreateFcn(hObject, eventdata, handles)
 if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
     set(hObject,'BackgroundColor','white');
 end
+
+
+% --- Executes on button press in Statistical_Toolbox.
+function Statistical_Toolbox_Callback(hObject, eventdata, handles)
+% hObject    handle to Statistical_Toolbox (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+StatisticalToolBox(handles);
+
