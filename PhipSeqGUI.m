@@ -58,7 +58,6 @@ handles.cluster_alg_list.String={'Hard KMEANS (on t-SNE)','Hard KMEANS (on HD Da
     'DBSCAN','Hierarchical Clustering','Network Graph-Based','Self Organized Map',...
     'GMM - Expectation Minimization','Variational Bayesian Inference for GMM'};
 addpath('Functions/');
-addpath('tSNE_matlab/');
 
 % Update handles structure
 guidata(hObject, handles);
